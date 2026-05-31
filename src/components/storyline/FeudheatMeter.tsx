@@ -1,0 +1,1 @@
+export function FeudheatMeter({ heat }: { heat: number }) { return <div className="flex items-center gap-2"><span className="text-xs text-zinc-500">Heat</span><div className="flex-1 bg-zinc-800 rounded-full h-2"><div className="bg-red-500 h-2 rounded-full" style={{ width: `${heat}%` }} /></div><span className="text-xs text-zinc-300">{heat}</span></div> }
