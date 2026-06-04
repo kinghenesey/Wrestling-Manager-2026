@@ -1,36 +1,45 @@
-import { create } from "zustand"
+﻿import { create } from "zustand"
 import { persist } from "zustand/middleware"
-import type { GameState, PlayerManager, CalendarEvent } from "../types/game"
+import type { GameState, PlayerManager, CalendarEvent } from "@/types/game"
+import { simulateWeek } from "@/engine/weekSimEngine"
+import { useRosterStore } from "@/store/useRosterStore"
+import { useStorylineStore } from "@/store/useStorylineStore"
+import type { WeekSimResult } from "@/types/WeekSim"
 
 interface GameStore {
   game: GameState
+  lastSimResult: WeekSimResult | null
   setGame: (g: GameState) => void
   advanceWeek: () => void
   updatePlayer: (updates: Partial<PlayerManager>) => void
   addCalendarEvent: (event: CalendarEvent) => void
+  addReputationPoints: (points: number) => void
   setGameSpeed: (speed: GameState["gameSpeed"]) => void
   setPaused: (paused: boolean) => void
   resetGame: () => void
+  startNewGame: (managerName: string, orgId: string) => void
+}
+
+const DEFAULT_PLAYER: PlayerManager = {
+  id: "player_1",
+  name: "New Manager",
+  reputation: "unknown",
+  reputationPoints: 0,
+  currentOrgId: "llw",
+  previousOrgIds: [],
+  jobOffers: [],
+  awardsWon: [],
+  yearsActive: 0,
+  totalShowsBooked: 0,
+  avgShowRating: 0,
+  career_highlights: [],
 }
 
 const DEFAULT_GAME: GameState = {
   week: 1,
   year: 2026,
   startYear: 2026,
-  player: {
-    id: "player_1",
-    name: "New Manager",
-    reputation: "unknown",
-    reputationPoints: 0,
-    currentOrgId: "llw",
-    previousOrgIds: [],
-    jobOffers: [],
-    awardsWon: [],
-    yearsActive: 0,
-    totalShowsBooked: 0,
-    avgShowRating: 0,
-    career_highlights: [],
-  },
+  player: DEFAULT_PLAYER,
   calendarEvents: [],
   isPaused: false,
   gameSpeed: "normal",
@@ -40,24 +49,89 @@ const DEFAULT_GAME: GameState = {
 
 export const useGameStore = create<GameStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       game: DEFAULT_GAME,
+      lastSimResult: null,
+
       setGame: (g) => set({ game: g }),
-      advanceWeek: () => set((state) => {
-        const newWeek = state.game.week + 1
-        const newYear = newWeek % 52 === 0 ? state.game.year + 1 : state.game.year
-        return { game: { ...state.game, week: newWeek, year: newYear, lastSaved: new Date().toISOString() } }
-      }),
+
+      advanceWeek: () => {
+        const { game } = get()
+        const wrestlers = useRosterStore.getState().wrestlers
+        const storylines = useStorylineStore.getState().storylines ?? []
+
+        const newWeek = game.week + 1
+        const newYear = newWeek > 0 && newWeek % 52 === 0
+          ? game.year + 1
+          : game.year
+
+        const result = simulateWeek({
+          week: newWeek,
+          year: newYear,
+          player: game.player,
+          wrestlers,
+          storylines,
+          orgId: game.player.currentOrgId,
+        })
+
+        // Commit wrestler updates
+        result.updatedWrestlers.forEach(w => {
+          useRosterStore.getState().updateWrestler(w.id, w)
+        })
+
+        // Commit storyline updates
+        const updateStoryline = useStorylineStore.getState().updateStoryline
+        if (updateStoryline) {
+          result.updatedStorylines.forEach(s => updateStoryline(s.id, s))
+        }
+
+        set({
+          lastSimResult: result,
+          game: {
+            ...game,
+            week: newWeek,
+            year: newYear,
+            player: result.updatedPlayer,
+            lastSaved: new Date().toISOString(),
+          },
+        })
+      },
+
       updatePlayer: (updates) => set((state) => ({
         game: { ...state.game, player: { ...state.game.player, ...updates } },
       })),
+
       addCalendarEvent: (event) => set((state) => ({
         game: { ...state.game, calendarEvents: [...state.game.calendarEvents, event] },
       })),
+
+      addReputationPoints: (points) => set((state) => ({
+        game: {
+          ...state.game,
+          player: {
+            ...state.game.player,
+            reputationPoints: state.game.player.reputationPoints + points,
+          },
+        },
+      })),
+
       setGameSpeed: (speed) => set((state) => ({ game: { ...state.game, gameSpeed: speed } })),
       setPaused: (paused) => set((state) => ({ game: { ...state.game, isPaused: paused } })),
-      resetGame: () => set({ game: DEFAULT_GAME }),
+      resetGame: () => set({ game: DEFAULT_GAME, lastSimResult: null }),
+
+      startNewGame: (managerName, orgId) => set({
+        game: {
+          ...DEFAULT_GAME,
+          player: {
+            ...DEFAULT_PLAYER,
+            name: managerName.trim() || "The Booker",
+            currentOrgId: orgId,
+          },
+          lastSaved: new Date().toISOString(),
+        },
+        lastSimResult: null,
+      }),
     }),
-    { name: "wm26-game" }
+    { name: "wm26-game-v3", version: 3 }
   )
 )

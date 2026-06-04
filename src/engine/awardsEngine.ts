@@ -150,7 +150,7 @@ function scoreCandidateForCategory(
  
 export function calculateAwardWinner(
   nominees: AwardNominee[],
-  category: AwardCategory
+  _category: AwardCategory
 ): { winnerId: string; breakdown: Award['voteBreakdown'] } {
   if (nominees.length === 0) return { winnerId: '', breakdown: { fanVotes: 0, mediaVotes: 0, peerVotes: 0 } }
  
@@ -189,7 +189,7 @@ export function buildAwardsCeremony(
     'best_manager_of_year', 'best_org_of_year', 'underground_king', 'legend_award',
   ]
  
-  const awards: Award[] = categories.map((cat, i) => {
+  const awards: Award[] = categories.map((cat, _i) => {
     const nominees = generateNominees(cat, wrestlers, yearStats, shows)
     const { winnerId, breakdown } = calculateAwardWinner(nominees, cat)
  

@@ -72,7 +72,7 @@ export function calculateInjuryProbability(wrestler: Wrestler): number {
 
 // ── Generate Random Injury ────────────────────────────────────────────────────
 
-export function rollInjury(wrestler: Wrestler, isFromMatch: boolean): Injury | null {
+export function rollInjury(wrestler: Wrestler, _isFromMatch: boolean): Injury | null {
   const probability = calculateInjuryProbability(wrestler)
   const roll = Math.random() * 100
 

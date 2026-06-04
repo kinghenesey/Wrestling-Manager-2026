@@ -1,9 +1,11 @@
 ﻿import { useState } from "react"
-import { Search, Users } from "lucide-react"
+import { Search, Users, UserPlus, X } from "lucide-react"
 import { useRosterStore } from "@/store/useRosterStore"
 import { useGameStore } from "@/store/useGameStore"
+import { useDivisionStore } from "@/store/useDivisionStore"
 import { getPortraitSrc, getFallbackPortrait } from "@/utils/portraits"
-import type { Wrestler } from "@/types/wrestler"
+import type { Wrestler, Contract } from "@/types/wrestler"
+import { simulateFreeAgentResponse } from "@/engine/contractEngine"
 
 const PUSH_COLORS: Record<string, string> = {
   champion:    "bg-amber-500/20 text-amber-400 border-amber-500/30",
@@ -54,7 +56,7 @@ function Portrait({ portraitId, gender, size }: { portraitId: string; gender: "m
       <img
         src={src}
         onError={(e) => { e.currentTarget.src = fallback }}
-        className={sz + " rounded-full object-top border border-zinc-600 flex-shrink-0"}
+        className={sz + " rounded-full object-top object-cover border border-zinc-600 flex-shrink-0"}
         alt=""
       />
     )
@@ -66,63 +68,206 @@ function Portrait({ portraitId, gender, size }: { portraitId: string; gender: "m
   )
 }
 
-function WrestlerRow({ wrestler: w, isSelected, onClick }: { wrestler: Wrestler; isSelected: boolean; onClick: () => void }) {
+function SigningModal({ wrestler: w, orgBudget, onSign, onClose }: {
+  wrestler: Wrestler
+  orgBudget: number
+  onSign: (contract: Contract) => void
+  onClose: () => void
+}) {
+  const avgStat = Math.round(Object.values(w.stats).reduce((a, b) => a + b, 0) / 8)
+  const baseDemand = Math.max(150, Math.round(avgStat * 4 + w.popularity * 3 + w.overness * 2))
+  const [offerSalary, setOfferSalary] = useState(Math.round(baseDemand * 0.85))
+  const [offerWeeks, setOfferWeeks] = useState(26)
+
+  const canAfford = offerSalary <= orgBudget
+  const wrestlerHappy = offerSalary >= baseDemand * 0.8
+  const willSign = wrestlerHappy && canAfford
+
+  function handleSign() {
+    if (!willSign) return
+    const contract: Contract = {
+      salary: offerSalary,
+      bonuses: Math.round(offerSalary * 0.1),
+      weeksRemaining: offerWeeks,
+      exclusivity: offerWeeks >= 52 ? "exclusive" : "open",
+      happiness: offerSalary >= baseDemand ? 90 : 70,
+      noTradeClause: false,
+      signingOrgId: "player_org",
+    }
+    onSign(contract)
+  }
+
   return (
-    <div
-      onClick={onClick}
-      className={"flex items-center gap-4 p-3 rounded-lg cursor-pointer transition-colors border " + (isSelected ? "bg-zinc-700/60 border-zinc-600" : "bg-zinc-900 border-zinc-800 hover:bg-zinc-800/60")}
-    >
-      <Portrait portraitId={w.portraitId} gender={w.gender} size="sm" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-zinc-100 truncate">{w.name}</span>
-          <span className={"text-xs font-medium " + (ALIGN_COLORS[w.alignment] ?? "text-zinc-400")}>{w.alignment}</span>
-          {w.injury && !w.injury.isKayfabe && (
-            <span className="text-xs px-1.5 py-0.5 rounded border text-red-400 border-red-500/30">Injured</span>
-          )}
-          {w.isRookie && (
-            <span className="text-xs px-1.5 py-0.5 rounded border text-green-400 border-green-500/30">Rookie</span>
-          )}
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-md p-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-zinc-100">Sign {w.name}</h2>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200">
+            <X className="w-5 h-5" />
+          </button>
         </div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-zinc-500">{w.nationality}</span>
-          <span className="text-xs text-zinc-600">·</span>
-          <span className="text-xs text-zinc-500">{w.weightClass}</span>
-          <span className="text-xs text-zinc-600">·</span>
-          <span className="text-xs text-zinc-500">Age {w.age}</span>
+
+        <div className="flex items-center gap-3 bg-zinc-800/50 rounded-lg p-3">
+          <Portrait portraitId={w.portraitId} gender={w.gender} size="sm" />
+          <div>
+            <p className="text-sm font-medium text-zinc-100">{w.name}</p>
+            <p className="text-xs text-zinc-500">{w.nationality} � {w.weightClass} � {w.pushLevel}</p>
+            <p className={"text-xs font-medium " + (ALIGN_COLORS[w.alignment] ?? "")}>{w.alignment}</p>
+          </div>
         </div>
-      </div>
-      <span className={"text-xs px-2 py-0.5 rounded border flex-shrink-0 " + (PUSH_COLORS[w.pushLevel] ?? "")}>
-        {w.pushLevel}
-      </span>
-      <div className="hidden lg:flex items-center gap-4 flex-shrink-0">
-        <div>
-          <p className="text-xs text-zinc-500 mb-0.5">Momentum</p>
-          <MiniBar value={w.momentum} color="bg-amber-400" />
+
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Quick Stats</p>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {[
+              { label: "In Ring", val: w.stats.inRing },
+              { label: "Promo",   val: w.stats.promo   },
+              { label: "Charisma",val: w.stats.charisma },
+            ].map((s) => (
+              <div key={s.label} className="bg-zinc-800 rounded p-2">
+                <p className="text-base font-bold text-amber-400">{s.val}</p>
+                <p className="text-xs text-zinc-500">{s.label}</p>
+              </div>
+            ))}
+          </div>
         </div>
-        <div>
-          <p className="text-xs text-zinc-500 mb-0.5">Popularity</p>
-          <MiniBar value={w.popularity} color="bg-blue-400" />
+
+        <div className="space-y-3">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-zinc-400">Weekly Salary Offer</label>
+              <span className="text-xs text-zinc-500">Wants: ${baseDemand.toLocaleString()}/wk</span>
+            </div>
+            <input
+              type="range"
+              min={100}
+              max={Math.round(baseDemand * 1.5)}
+              step={50}
+              value={offerSalary}
+              onChange={(e) => setOfferSalary(Number(e.target.value))}
+              className="w-full accent-amber-400"
+            />
+            <div className="flex justify-between text-xs mt-1">
+              <span className={canAfford ? "text-green-400" : "text-red-400"}>
+                Your offer: ${offerSalary.toLocaleString()}/wk
+              </span>
+              <span className="text-zinc-500">Budget: ${orgBudget.toLocaleString()}/wk</span>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-zinc-400">Contract Length</label>
+              <span className="text-xs text-zinc-300">{offerWeeks} weeks ({Math.round(offerWeeks/52*10)/10} years)</span>
+            </div>
+            <input
+              type="range"
+              min={13}
+              max={156}
+              step={13}
+              value={offerWeeks}
+              onChange={(e) => setOfferWeeks(Number(e.target.value))}
+              className="w-full accent-amber-400"
+            />
+          </div>
         </div>
-        <div>
-          <p className="text-xs text-zinc-500 mb-0.5">Morale</p>
-          <MiniBar value={w.morale} color="bg-green-400" />
+
+        <div className={"rounded-lg p-3 border text-sm " + (willSign ? "bg-green-500/10 border-green-500/30 text-green-400" : !wrestlerHappy ? "bg-red-500/10 border-red-500/30 text-red-400" : "bg-orange-500/10 border-orange-500/30 text-orange-400")}>
+          {!canAfford && "You cannot afford this salary with your current budget."}
+          {canAfford && !wrestlerHappy && w.name + " finds this offer insulting. Increase the salary."}
+          {willSign && w.name + " is happy with this offer and will sign."}
+        </div>
+
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-sm font-medium">
+            Cancel
+          </button>
+          <button
+            onClick={handleSign}
+            disabled={!willSign}
+            className={"flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors " + (willSign ? "bg-amber-500 hover:bg-amber-600 text-zinc-950" : "bg-zinc-700 text-zinc-500 cursor-not-allowed")}
+          >
+            Sign Contract
+          </button>
         </div>
       </div>
     </div>
   )
 }
 
+function WrestlerRow({ wrestler: w, isSelected, onClick, showSignButton, onSign }: {
+  wrestler: Wrestler
+  isSelected: boolean
+  onClick: () => void
+  showSignButton?: boolean
+  onSign?: () => void
+}) {
+  return (
+    <div
+      className={"flex items-center gap-4 p-3 rounded-lg border transition-colors " + (isSelected ? "bg-zinc-700/60 border-zinc-600" : "bg-zinc-900 border-zinc-800 hover:bg-zinc-800/60")}
+    >
+      <div onClick={onClick} className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer">
+        <Portrait portraitId={w.portraitId} gender={w.gender} size="sm" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-zinc-100 truncate">{w.name}</span>
+            <span className={"text-xs font-medium " + (ALIGN_COLORS[w.alignment] ?? "text-zinc-400")}>{w.alignment}</span>
+            {w.injury && !w.injury.isKayfabe && (
+              <span className="text-xs px-1.5 py-0.5 rounded border text-red-400 border-red-500/30">Injured</span>
+            )}
+            {w.isRookie && (
+              <span className="text-xs px-1.5 py-0.5 rounded border text-green-400 border-green-500/30">Rookie</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-xs text-zinc-500">{w.nationality}</span>
+            <span className="text-xs text-zinc-600">�</span>
+            <span className="text-xs text-zinc-500">{w.weightClass}</span>
+            <span className="text-xs text-zinc-600">�</span>
+            <span className="text-xs text-zinc-500">Age {w.age}</span>
+          </div>
+        </div>
+        <span className={"text-xs px-2 py-0.5 rounded border flex-shrink-0 " + (PUSH_COLORS[w.pushLevel] ?? "")}>
+          {w.pushLevel}
+        </span>
+        <div className="hidden lg:flex items-center gap-4 flex-shrink-0">
+          <div>
+            <p className="text-xs text-zinc-500 mb-0.5">Momentum</p>
+            <MiniBar value={w.momentum} color="bg-amber-400" />
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 mb-0.5">Popularity</p>
+            <MiniBar value={w.popularity} color="bg-blue-400" />
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500 mb-0.5">Morale</p>
+            <MiniBar value={w.morale} color="bg-green-400" />
+          </div>
+        </div>
+      </div>
+      {showSignButton && onSign && (
+        <button
+          onClick={onSign}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 text-xs font-bold rounded-lg flex-shrink-0 transition-colors"
+        >
+          <UserPlus className="w-3.5 h-3.5" />
+          Sign
+        </button>
+      )}
+    </div>
+  )
+}
+
 function DetailPanel({ w, onClose }: { w: Wrestler; onClose: () => void }) {
   const statKeys = [
-    { key: "inRing" as const,      label: "In Ring"      },
-    { key: "promo" as const,       label: "Promo"        },
-    { key: "charisma" as const,    label: "Charisma"     },
-    { key: "athleticism" as const, label: "Athleticism"  },
-    { key: "psychology" as const,  label: "Psychology"   },
-    { key: "look" as const,        label: "Look"         },
-    { key: "toughness" as const,   label: "Toughness"    },
-    { key: "stamina" as const,     label: "Stamina"      },
+    { key: "inRing" as const,      label: "In Ring"     },
+    { key: "promo" as const,       label: "Promo"       },
+    { key: "charisma" as const,    label: "Charisma"    },
+    { key: "athleticism" as const, label: "Athleticism" },
+    { key: "psychology" as const,  label: "Psychology"  },
+    { key: "look" as const,        label: "Look"        },
+    { key: "toughness" as const,   label: "Toughness"   },
+    { key: "stamina" as const,     label: "Stamina"     },
   ]
 
   return (
@@ -133,7 +278,7 @@ function DetailPanel({ w, onClose }: { w: Wrestler; onClose: () => void }) {
           <div>
             <h2 className="text-base font-bold text-zinc-100">{w.name}</h2>
             <p className="text-xs text-zinc-500">{w.realName}</p>
-            <p className="text-xs text-zinc-500">{w.nationality} · Age {w.age}</p>
+            <p className="text-xs text-zinc-500">{w.nationality} � Age {w.age}</p>
           </div>
         </div>
         <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 text-xl leading-none">x</button>
@@ -149,7 +294,7 @@ function DetailPanel({ w, onClose }: { w: Wrestler; onClose: () => void }) {
       <div className="grid grid-cols-3 gap-2 py-2 border-y border-zinc-800">
         {[
           { label: "Momentum",  val: w.momentum,  color: "text-amber-400" },
-          { label: "Popularity", val: w.popularity, color: "text-blue-400"  },
+          { label: "Popularity", val: w.popularity, color: "text-blue-400" },
           { label: "Morale",    val: w.morale,    color: "text-green-400" },
         ].map((x) => (
           <div key={x.label} className="text-center">
@@ -224,16 +369,6 @@ function DetailPanel({ w, onClose }: { w: Wrestler; onClose: () => void }) {
         </div>
       ) : null}
 
-      {w.injury ? (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-          <p className="text-xs font-medium text-red-400 mb-1">
-            {w.injury.isKayfabe ? "Kayfabe Injury" : "Injured"}
-          </p>
-          <p className="text-xs text-zinc-300">{w.injury.type}</p>
-          <p className="text-xs text-zinc-500">{w.injury.weeksRemaining} weeks remaining · {w.injury.severity}</p>
-        </div>
-      ) : null}
-
       {w.championships.length > 0 ? (
         <div>
           <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Championships</p>
@@ -262,10 +397,15 @@ function DetailPanel({ w, onClose }: { w: Wrestler; onClose: () => void }) {
 
 export function Roster() {
   const { game } = useGameStore()
-  const { getByOrg, getFreeAgents, wrestlers } = useRosterStore()
+  const { getByOrg, getFreeAgents, wrestlers, signContract, updateWrestler } = useRosterStore()
+  const { getOrgById } = useDivisionStore()
   const [search, setSearch] = useState("")
   const [tab, setTab] = useState<"male" | "female" | "free">("male")
   const [selected, setSelected] = useState<Wrestler | null>(null)
+  const [signingTarget, setSigningTarget] = useState<Wrestler | null>(null)
+
+  const org = getOrgById(game.player.currentOrgId)
+  const orgBudget = org?.wealth ?? 5000
 
   const orgRoster = getByOrg(game.player.currentOrgId)
   const freeAgents = getFreeAgents()
@@ -286,17 +426,39 @@ export function Roster() {
   const currentList = tab === "male" ? males : tab === "female" ? females : free
 
   const tabs = [
-    { key: "male"   as const, label: "Men (" + males.length + ")"          },
-    { key: "female" as const, label: "Women (" + females.length + ")"      },
-    { key: "free"   as const, label: "Free Agents (" + free.length + ")"   },
+    { key: "male"   as const, label: "Men (" + males.length + ")"         },
+    { key: "female" as const, label: "Women (" + females.length + ")"     },
+    { key: "free"   as const, label: "Free Agents (" + free.length + ")"  },
   ]
+
+  function handleSign(contract: Contract) {
+    if (!signingTarget) return
+    signContract(signingTarget.id, contract, game.player.currentOrgId)
+    updateWrestler(signingTarget.id, {
+      status: "active",
+      currentOrgId: game.player.currentOrgId,
+    })
+    setSigningTarget(null)
+    setTab(signingTarget.gender === "female" ? "female" : "male")
+  }
 
   return (
     <div className="space-y-4">
+      {signingTarget && (
+        <SigningModal
+          wrestler={signingTarget}
+          orgBudget={orgBudget}
+          onSign={handleSign}
+          onClose={() => setSigningTarget(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-100">Roster</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">{orgRoster.length} wrestlers · {wrestlers.length} total in game</p>
+          <p className="text-sm text-zinc-500 mt-0.5">
+            {orgRoster.length} under contract � {freeAgents.length} free agents � {wrestlers.length} total in game
+          </p>
         </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
@@ -308,6 +470,12 @@ export function Roster() {
           />
         </div>
       </div>
+
+      {tab === "free" && free.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 text-sm text-amber-400">
+          <strong>{free.length} free agents</strong> available to sign. Click Sign on any wrestler to make an offer.
+        </div>
+      )}
 
       <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-1 w-fit">
         {tabs.map((t) => (
@@ -327,6 +495,7 @@ export function Roster() {
             <div className="flex flex-col items-center justify-center py-20 text-zinc-600">
               <Users className="w-12 h-12 mb-3 opacity-30" />
               <p className="text-sm">No wrestlers found.</p>
+              {tab === "free" && <p className="text-xs mt-1">All free agents have been signed.</p>}
             </div>
           )}
           {currentList.map((w) => (
@@ -335,6 +504,8 @@ export function Roster() {
               wrestler={w}
               isSelected={selected?.id === w.id}
               onClick={() => setSelected(selected?.id === w.id ? null : w)}
+              showSignButton={tab === "free"}
+              onSign={() => setSigningTarget(w)}
             />
           ))}
         </div>

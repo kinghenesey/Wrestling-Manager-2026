@@ -1,46 +1,40 @@
 ﻿import { useState } from "react"
-import { OrgBadge } from "@/utils/orgColors"
 import { useGameStore } from "@/store/useGameStore"
-import { useNavigate } from "react-router-dom"
 import { useRosterStore } from "@/store/useRosterStore"
-import { getStarterRoster } from "@/data/wrestlers"
+import { useNavigate } from "react-router-dom"
+import { OrgBadge } from "@/utils/orgColors"
+import { STARTING_WRESTLERS, getStarterRoster } from "@/data/wrestlers"
 
 const STARTER_ORGS = [
-  { id: "llw", name: "Local Legacy Wrestling", region: "Midwest", prestige: 8,  budget: 5000,  description: "A small community promotion with loyal local fans. Perfect starting ground." },
-  { id: "cwl", name: "Community Wrestling League", region: "Southeast", prestige: 6, budget: 4500, description: "Grassroots wrestling with a tight-knit fanbase. Hungry talent everywhere." },
-  { id: "pwl", name: "Pro Wrestling Local", region: "Northeast", prestige: 7, budget: 4800, description: "Northeast indie scene. Technically gifted roster, low resources." },
-  { id: "sgw", name: "Small Gym Wrestling", region: "West Coast", prestige: 5, budget: 4000, description: "Bare bones. No TV. No budget. Just you, a ring, and ambition." },
-  { id: "hlw", name: "Hometown Legends Wrestling", region: "Texas", prestige: 9, budget: 5500, description: "Texas wrestling royalty at the local level. Passionate crowd, small market." },
+  { id: "llw", name: "Local Legacy Wrestling",      region: "Midwest",    prestige: 8, budget: 5000, description: "A small community promotion with loyal local fans. Perfect starting ground."              },
+  { id: "cwl", name: "Community Wrestling League",  region: "Southeast",  prestige: 6, budget: 4500, description: "Grassroots wrestling with a tight-knit fanbase. Hungry talent everywhere."               },
+  { id: "pwl", name: "Pro Wrestling Local",          region: "Northeast",  prestige: 7, budget: 4800, description: "Northeast indie scene. Technically gifted roster, low resources."                        },
+  { id: "sgw", name: "Small Gym Wrestling",          region: "West Coast", prestige: 5, budget: 4000, description: "Bare bones. No TV. No budget. Just you, a ring, and ambition."                          },
+  { id: "hlw", name: "Hometown Legends Wrestling",   region: "Texas",      prestige: 9, budget: 5500, description: "Texas wrestling royalty at the local level. Passionate crowd, small market."             },
 ]
 
 const GAME_STYLES = [
-  { id: "simulation", label: "Full Simulation", desc: "Everything is simulated. AI books other orgs. Realistic economy." },
-  { id: "story",      label: "Story Mode",      desc: "Focus on your storylines. Lighter simulation on other orgs." },
-  { id: "sandbox",    label: "Sandbox",          desc: "No reputation gates. Start anywhere. Unlimited budget." },
+  { id: "simulation", label: "Full Simulation", desc: "Everything simulated. Realistic economy and AI-booked orgs."  },
+  { id: "story",      label: "Story Mode",      desc: "Focus on your storylines. Lighter simulation on other orgs."   },
+  { id: "sandbox",    label: "Sandbox",          desc: "No reputation gates. Start anywhere. Unlimited budget."        },
 ]
 
 export function NewGame() {
-  const { updatePlayer, setGame, game } = useGameStore()
+  const { startNewGame } = useGameStore()
   const navigate = useNavigate()
 
   const [step, setStep] = useState<"manager" | "org" | "style" | "confirm">("manager")
   const [managerName, setManagerName] = useState("")
   const [selectedOrg, setSelectedOrg] = useState(STARTER_ORGS[0])
   const [gameStyle, setGameStyle] = useState(GAME_STYLES[0])
-  const [orgAlias, setOrgAlias] = useState("")
 
   function handleStart() {
-    const starterWrestlers = getStarterRoster(selectedOrg.id)
-    useRosterStore.setState((s) => ({
-      wrestlers: [
-        ...s.wrestlers.filter((w) => w.currentOrgId !== selectedOrg.id),
-        ...starterWrestlers,
-      ]
-    }))
-    updatePlayer({
-      name: managerName || "The Booker",
-      currentOrgId: selectedOrg.id,
-    })
+    const starterRoster = getStarterRoster(selectedOrg.id)
+    const otherWrestlers = STARTING_WRESTLERS.filter(
+      (w) => !starterRoster.some((s) => s.id === w.id)
+    )
+    useRosterStore.setState({ wrestlers: [...starterRoster, ...otherWrestlers] })
+    startNewGame(managerName, selectedOrg.id)
     navigate("/dashboard")
   }
 
@@ -58,13 +52,13 @@ export function NewGame() {
           <p className="text-zinc-500 text-sm">Your journey from local booker to legendary promoter starts here.</p>
         </div>
 
-        <div className="flex items-center justify-between mb-2">
-          {["manager","org","style","confirm"].map((s, i) => (
+        <div className="flex items-center gap-2 justify-center mb-2">
+          {(["manager","org","style","confirm"] as const).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
-              <div className={"w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold " + (step === s ? "bg-amber-400 text-zinc-950" : ["manager","org","style","confirm"].indexOf(step) > i ? "bg-zinc-700 text-zinc-300" : "bg-zinc-800 text-zinc-600")}>
+              <div className={"w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors " + (step === s ? "bg-amber-400 text-zinc-950" : ["manager","org","style","confirm"].indexOf(step) > i ? "bg-zinc-600 text-zinc-300" : "bg-zinc-800 text-zinc-600")}>
                 {i + 1}
               </div>
-              {i < 3 && <div className={"flex-1 h-px w-16 " + (["manager","org","style","confirm"].indexOf(step) > i ? "bg-zinc-600" : "bg-zinc-800")} />}
+              {i < 3 && <div className={"h-px w-12 transition-colors " + (["manager","org","style","confirm"].indexOf(step) > i ? "bg-zinc-600" : "bg-zinc-800")} />}
             </div>
           ))}
         </div>
@@ -83,16 +77,14 @@ export function NewGame() {
                   placeholder="Enter your name..."
                   className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg text-sm focus:outline-none focus:border-amber-500"
                   maxLength={30}
+                  onKeyDown={(e) => e.key === "Enter" && setStep("org")}
                 />
               </div>
-              <div className="bg-zinc-800/50 rounded-lg p-4 space-y-2">
+              <div className="bg-zinc-800/50 rounded-lg p-4 space-y-1">
                 <p className="text-xs font-medium text-zinc-400">Starting Reputation: <span className="text-amber-400">Unknown</span></p>
-                <p className="text-xs text-zinc-500">You start with zero reputation. Every decision you make builds toward becoming a legend. Elite orgs will not even take your calls — yet.</p>
+                <p className="text-xs text-zinc-500">You start with zero reputation. Elite orgs will not even take your calls yet. Build from nothing.</p>
               </div>
-              <button
-                onClick={() => setStep("org")}
-                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold rounded-lg transition-colors"
-              >
+              <button onClick={() => setStep("org")} className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold rounded-lg transition-colors">
                 Continue
               </button>
             </div>
@@ -107,30 +99,18 @@ export function NewGame() {
                   <div
                     key={org.id}
                     onClick={() => setSelectedOrg(org)}
-                    className={"p-4 rounded-lg border cursor-pointer transition-colors " + (selectedOrg.id === org.id ? "border-amber-500 bg-amber-500/10" : "border-zinc-700 bg-zinc-800/50 hover:border-zinc-600")}
+                    className={"p-4 rounded-lg border cursor-pointer transition-all " + (selectedOrg.id === org.id ? "border-amber-500 bg-amber-500/10" : "border-zinc-700 bg-zinc-800/50 hover:border-zinc-600")}
                   >
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="space-y-1">
                         <OrgBadge orgId={org.id} name={org.name} size="sm" />
-                        <p className="text-xs text-zinc-500 mt-0.5">{org.region} · Prestige {org.prestige}/100 · Budget ${org.budget.toLocaleString()}/wk</p>
-                        <p className="text-xs text-zinc-400 mt-1">{org.description}</p>
+                        <p className="text-xs text-zinc-500">{org.region} · Prestige {org.prestige}/100 · Budget ${org.budget.toLocaleString()}/wk</p>
+                        <p className="text-xs text-zinc-400">{org.description}</p>
                       </div>
-                      {selectedOrg.id === org.id && (
-                        <span className="text-amber-400 text-lg ml-3">&#10003;</span>
-                      )}
+                      {selectedOrg.id === org.id && <span className="text-amber-400 text-lg ml-3 flex-shrink-0">&#10003;</span>}
                     </div>
                   </div>
                 ))}
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Custom Show Name (optional)</label>
-                <input
-                  value={orgAlias}
-                  onChange={(e) => setOrgAlias(e.target.value)}
-                  placeholder={"e.g. " + selectedOrg.name + " Monday Night..."}
-                  className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg text-sm focus:outline-none focus:border-amber-500"
-                  maxLength={40}
-                />
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setStep("manager")} className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-lg transition-colors">Back</button>
@@ -148,7 +128,7 @@ export function NewGame() {
                   <div
                     key={style.id}
                     onClick={() => setGameStyle(style)}
-                    className={"p-4 rounded-lg border cursor-pointer transition-colors " + (gameStyle.id === style.id ? "border-amber-500 bg-amber-500/10" : "border-zinc-700 bg-zinc-800/50 hover:border-zinc-600")}
+                    className={"p-4 rounded-lg border cursor-pointer transition-all " + (gameStyle.id === style.id ? "border-amber-500 bg-amber-500/10" : "border-zinc-700 bg-zinc-800/50 hover:border-zinc-600")}
                   >
                     <div className="flex items-start justify-between">
                       <div>
@@ -170,14 +150,14 @@ export function NewGame() {
           {step === "confirm" && (
             <div className="space-y-4">
               <h2 className="text-xl font-bold text-zinc-100">Ready to Begin</h2>
-              <div className="bg-zinc-800/50 rounded-lg p-4 space-y-3">
+              <div className="bg-zinc-800/50 rounded-lg p-5 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-zinc-500">Manager</span>
-                  <span className="text-zinc-100 font-medium">{managerName || "The Booker"}</span>
+                  <span className="text-zinc-100 font-medium">{managerName.trim() || "The Booker"}</span>
                 </div>
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-sm items-center">
                   <span className="text-zinc-500">Starting Org</span>
-                  <span className="text-zinc-100 font-medium">{selectedOrg.name}</span>
+                  <OrgBadge orgId={selectedOrg.id} name={selectedOrg.name} size="sm" />
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-zinc-500">Region</span>
@@ -188,14 +168,18 @@ export function NewGame() {
                   <span className="text-amber-400 font-medium">${selectedOrg.budget.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500">Starting Roster</span>
+                  <span className="text-zinc-100 font-medium">2 wrestlers + free agents</span>
+                </div>
+                <div className="flex justify-between text-sm">
                   <span className="text-zinc-500">Game Style</span>
                   <span className="text-zinc-100 font-medium">{gameStyle.label}</span>
                 </div>
               </div>
-              <p className="text-xs text-zinc-600 text-center">Your reputation is unknown. Every org above Tier 5 is out of reach — for now. Build your legacy one show at a time.</p>
+              <p className="text-xs text-zinc-600 text-center">Your reputation is unknown. Build your legacy one show at a time.</p>
               <div className="flex gap-3">
                 <button onClick={() => setStep("style")} className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-lg transition-colors">Back</button>
-                <button onClick={handleStart} className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold rounded-lg transition-colors text-lg">
+                <button onClick={handleStart} className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold rounded-lg text-lg transition-colors">
                   Start Career
                 </button>
               </div>
@@ -206,4 +190,3 @@ export function NewGame() {
     </div>
   )
 }
-

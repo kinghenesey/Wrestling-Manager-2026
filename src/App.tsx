@@ -5,7 +5,9 @@ import { Dashboard }   from "@/pages/Dashboard"
 import { Roster }      from "@/pages/Roster"
 import { Storylines }  from "@/pages/Storylines"
 import { ShowPlanner } from "@/pages/ShowPlanner"
-import { Academy }     from "@/pages/Academy"
+import Academy from '@/pages/Academy'
+// in routes:
+<Route path="/academy" element={<Academy />} />
 import { Finances }    from "@/pages/Finances"
 import { Agents }      from "@/pages/Agents"
 import { Divisions }   from "@/pages/Divisions"

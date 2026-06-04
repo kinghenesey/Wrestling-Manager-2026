@@ -1,281 +1,149 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// src/engine/contractEngine.ts
-// Contract negotiations, salary demands, bidding wars, poaching, renewals
-// ─────────────────────────────────────────────────────────────────────────────
+﻿import type { Wrestler, Contract } from "@/types/wrestler"
+import type { Organization } from "@/types/division"
 
-import type { Wrestler, Contract } from '../types/wrestler'
-import type { Organization } from '../types/division'
+export interface NegotiationResult {
+  outcome: "accepted" | "rejected" | "countered" | "ghosted"
+  reason: string
+  counterOffer?: { salary: number; weeksRemaining: number }
+  alternativeOrgHint?: string
+  wrestlerMood: "thrilled" | "happy" | "neutral" | "unhappy" | "insulted"
+}
 
-// ── Salary Demand Calculator ─────────────────────────────────────────────────
-// What a wrestler thinks they deserve based on their market value
+const REP_TIER_VALUE: Record<string, number> = {
+  legendary: 100, elite: 80, notable: 60, respected: 40, regional: 20, unknown: 5
+}
 
-export function calculateSalaryDemand(
+const ORG_TIER_VALUE: Record<string, number> = {
+  elite: 100, major: 70, regional: 45, indie: 25, local: 10, underground: 0
+}
+
+const ALTERNATIVE_ORGS: Record<string, string[]> = {
+  elite:      ["AWF", "TPW", "GCW"],
+  major:      ["IRA", "NFW", "APW"],
+  regional:   ["NBC", "SWF", "EWUK"],
+  indie:      ["SFI", "RWI", "WSX"],
+  local:      ["LLW", "CWL", "HLW"],
+  underground:["The Underground"],
+}
+
+export function simulateFreeAgentResponse(
   wrestler: Wrestler,
-  orgTier: string
-): { weekly: number; signingBonus: number } {
+  offer: Contract,
+  org: Organization,
+  managerReputation: string
+): NegotiationResult {
+  const orgTierVal  = ORG_TIER_VALUE[org.tier] ?? 10
+  const repVal      = REP_TIER_VALUE[managerReputation] ?? 5
+  const wrestlerVal = Math.round((wrestler.overness + wrestler.popularity + wrestler.momentum) / 3)
+
+  // How attractive is this org to this wrestler
+  // High overness wrestlers want better orgs
+  const orgAttractiveness = orgTierVal + (repVal * 0.3)
+  const wrestlerExpectation = wrestlerVal * 0.8
+
+  const gap = wrestlerExpectation - orgAttractiveness
+
+  // Salary check
+  const avgStat = Math.round(Object.values(wrestler.stats).reduce((a, b) => a + b, 0) / 8)
+  const minimumAcceptable = Math.max(100, Math.round(avgStat * 3 + wrestler.popularity * 2 + wrestlerVal * 1.5))
+  const offerRatio = offer.salary / minimumAcceptable
+
+  // ── Superstar refuses low-tier org outright ──────────────────────────────
+  if (wrestler.pushLevel === "champion" || wrestler.pushLevel === "mainevent") {
+    if (org.tier === "local" || org.tier === "indie") {
+      const altTier = wrestler.overness >= 80 ? "major" : "regional"
+      return {
+        outcome: "rejected",
+        reason: `${wrestler.name} is a main event caliber talent. They have no interest in working at the ${org.tier} level. They want a bigger stage.`,
+        alternativeOrgHint: ALTERNATIVE_ORGS[altTier]?.[Math.floor(Math.random() * 3)] ?? "a major org",
+        wrestlerMood: "insulted",
+      }
+    }
+  }
+
+  if (wrestler.pushLevel === "uppercard" && org.tier === "local") {
+    if (Math.random() < 0.65) {
+      return {
+        outcome: "rejected",
+        reason: `${wrestler.name} feels they are past the local circuit stage. They are looking for regional or higher exposure.`,
+        alternativeOrgHint: ALTERNATIVE_ORGS["regional"]?.[0] ?? "a regional org",
+        wrestlerMood: "unhappy",
+      }
+    }
+  }
+
+  // ── Gap too large — reputation mismatch ─────────────────────────────────
+  if (gap > 40 && Math.random() < 0.7) {
+    return {
+      outcome: "rejected",
+      reason: `${wrestler.name} does not feel ${org.name} is the right fit for their career right now. The org prestige (${org.prestige}/100) is below what they are looking for.`,
+      alternativeOrgHint: ALTERNATIVE_ORGS["major"]?.[Math.floor(Math.random() * 3)] ?? "a higher tier org",
+      wrestlerMood: "unhappy",
+    }
+  }
+
+  // ── Salary too low — counter offer ───────────────────────────────────────
+  if (offerRatio < 0.75) {
+    const counterSalary = Math.round(minimumAcceptable * 0.9)
+    return {
+      outcome: "countered",
+      reason: `${wrestler.name} appreciates the interest but finds the salary below market value. They want $${counterSalary.toLocaleString()}/week minimum.`,
+      counterOffer: { salary: counterSalary, weeksRemaining: offer.weeksRemaining },
+      wrestlerMood: "unhappy",
+    }
+  }
+
+  if (offerRatio < 0.88) {
+    if (Math.random() < 0.45) {
+      const counterSalary = Math.round(minimumAcceptable * 0.95)
+      return {
+        outcome: "countered",
+        reason: `${wrestler.name} likes the org but wants slightly better terms. Counter offer submitted.`,
+        counterOffer: { salary: counterSalary, weeksRemaining: Math.max(offer.weeksRemaining, 26) },
+        wrestlerMood: "neutral",
+      }
+    }
+  }
+
+  // ── Ghosted — free agent signs elsewhere ────────────────────────────────
+  if (gap > 20 && Math.random() < 0.25) {
+    const altOrg = ALTERNATIVE_ORGS[org.tier === "local" ? "regional" : "major"]?.[0] ?? "another org"
+    return {
+      outcome: "ghosted",
+      reason: `${wrestler.name} stopped responding. Word is they signed with ${altOrg} instead. You needed better reputation to compete.`,
+      alternativeOrgHint: altOrg,
+      wrestlerMood: "neutral",
+    }
+  }
+
+  // ── Accepted ─────────────────────────────────────────────────────────────
+  const mood = offerRatio >= 1.1 ? "thrilled" : offerRatio >= 0.95 ? "happy" : "neutral"
+  const moodMessages: Record<string, string> = {
+    thrilled: `${wrestler.name} is thrilled with the offer and signs immediately. Great deal for both sides!`,
+    happy:    `${wrestler.name} accepts the offer. They are happy with the terms and excited to join.`,
+    neutral:  `${wrestler.name} accepts the offer. They see it as a stepping stone and will prove themselves.`,
+  }
+
+  return {
+    outcome: "accepted",
+    reason: moodMessages[mood] ?? moodMessages.neutral,
+    wrestlerMood: mood as any,
+  }
+}
+
+export function calculateSalaryDemand(wrestler: Wrestler, orgTier: string): number {
   const tierBase: Record<string, number> = {
-    elite:      20000,
-    major:      6000,
-    regional:   2000,
-    indie:      600,
-    local:      200,
-    underground: 0,
+    elite: 20000, major: 6000, regional: 2000, indie: 600, local: 200, underground: 0
   }
-
   const base = tierBase[orgTier] ?? 200
-
-  // Push level multiplier
   const pushMult: Record<string, number> = {
-    champion:    2.5,
-    mainevent:   2.0,
-    uppercard:   1.5,
-    midcard:     1.1,
-    enhancement: 0.8,
-    jobber:      0.6,
+    champion: 2.5, mainevent: 2.0, uppercard: 1.5, midcard: 1.1, enhancement: 0.8, jobber: 0.6
   }
-
   const overness  = wrestler.overness / 100
   const momentum  = wrestler.momentum / 100
   const push      = pushMult[wrestler.pushLevel] ?? 1.0
-
   let weekly = base * push * (1 + overness * 0.5 + momentum * 0.3)
-
-  // Star power premium — wrestlers with 85+ popularity demand more
   if (wrestler.popularity >= 85) weekly *= 1.3
-  if (wrestler.popularity >= 95) weekly *= 1.2  // stacks
-
-  // Veteran premium — 400+ weeks experience
   if (wrestler.experience >= 400) weekly *= 1.15
-
-  // Potential premium — highly rated prospects demand above their current level
-  if (wrestler.potential >= 90 && wrestler.experience < 200) weekly *= 1.2
-
-  const signingBonus = Math.round(weekly * 4)
-
-  return {
-    weekly: Math.round(weekly),
-    signingBonus,
-  }
-}
-
-// ── Contract Offer Builder ────────────────────────────────────────────────────
-
-export function buildContractOffer(
-  org: Organization,
-  wrestler: Wrestler,
-  weeksLength: number,
-  includeNoTrade: boolean = false
-): Contract {
-  const demand = calculateSalaryDemand(wrestler, org.tier)
-
-  // Org's counteroffer is 80–95% of demand depending on their wealth
-  const affordability = Math.min(1, org.wealth / (demand.weekly * 52))
-  const offerPercent  = 0.75 + affordability * 0.2   // 75–95%
-
-  const salary   = Math.round(demand.weekly * offerPercent)
-  const bonuses  = Math.round(salary * 0.15)   // 15% of salary as appearance/title bonuses
-
-  return {
-    salary,
-    bonuses,
-    weeksRemaining: weeksLength,
-    exclusivity: org.tier === 'elite' || org.tier === 'major' ? 'exclusive' : 'open',
-    happiness: 75,
-    noTradeClause: includeNoTrade,
-    signingOrgId: org.id,
-  }
-}
-
-// ── Negotiation Outcome ───────────────────────────────────────────────────────
-
-export type NegotiationOutcome =
-  | 'accepted'
-  | 'countered'
-  | 'rejected'
-  | 'walked_away'    // wrestler signs elsewhere during negotiation
-
-export interface NegotiationResult {
-  outcome: NegotiationOutcome
-  finalContract: Contract | null
-  wrestlerMoodAfter: number        // 0–100
-  counterOffer?: Partial<Contract>
-  reason: string
-}
-
-export function simulateNegotiation(
-  wrestler: Wrestler,
-  offer: Contract,
-  demand: { weekly: number; signingBonus: number },
-  hasCompetingOffer: boolean
-): NegotiationResult {
-
-  const offerRatio = offer.salary / demand.weekly   // 1.0 = exactly what they want
-
-  // If there's a competing offer, wrestler is emboldened
-  const minAcceptRatio = hasCompetingOffer ? 0.92 : 0.82
-
-  // Happy wrestlers are easier to sign
-  const moodBonus = (wrestler.morale - 50) / 200   // ±0.25
-
-  const effectiveMin = minAcceptRatio - moodBonus
-
-  if (offerRatio >= 1.05) {
-    // Offer exceeds demand — instant yes
-    return {
-      outcome: 'accepted',
-      finalContract: offer,
-      wrestlerMoodAfter: Math.min(100, wrestler.morale + 15),
-      reason: `${wrestler.name} is thrilled with the offer. Signed immediately.`,
-    }
-  }
-
-  if (offerRatio >= effectiveMin) {
-    // Acceptable range — signed
-    const mood = Math.round(70 + (offerRatio - effectiveMin) / (1 - effectiveMin) * 25)
-    return {
-      outcome: 'accepted',
-      finalContract: { ...offer, happiness: mood },
-      wrestlerMoodAfter: mood,
-      reason: `${wrestler.name} accepts the offer. Satisfied but not ecstatic.`,
-    }
-  }
-
-  if (offerRatio >= effectiveMin - 0.15) {
-    // Below minimum but close — counter offer
-    const counterSalary = Math.round(demand.weekly * 0.95)
-    return {
-      outcome: 'countered',
-      finalContract: null,
-      wrestlerMoodAfter: wrestler.morale,
-      counterOffer: { salary: counterSalary, weeksRemaining: offer.weeksRemaining - 26 },
-      reason: `${wrestler.name} wants $${counterSalary.toLocaleString()}/week. Counter offer submitted.`,
-    }
-  }
-
-  // Too low — rejected
-  if (hasCompetingOffer && Math.random() < 0.4) {
-    return {
-      outcome: 'walked_away',
-      finalContract: null,
-      wrestlerMoodAfter: Math.max(0, wrestler.morale - 10),
-      reason: `${wrestler.name} signed with a rival org. Offer was too low and they had options.`,
-    }
-  }
-
-  return {
-    outcome: 'rejected',
-    finalContract: null,
-    wrestlerMoodAfter: Math.max(0, wrestler.morale - 5),
-    reason: `${wrestler.name} rejected the offer. Significantly below their value.`,
-  }
-}
-
-// ── Poaching System ───────────────────────────────────────────────────────────
-
-export interface PoachingAttempt {
-  targetWrestlerId: string
-  fromOrgId: string
-  toOrgId: string
-  offerSalary: number
-  offerWeeks: number
-  weekAttempted: number
-}
-
-export function calculatePoachingInterest(
-  wrestler: Wrestler,
-  currentOrg: Organization,
-  targetOrg: Organization
-): number {
-  // 0–100: how interested a wrestler is in leaving
-
-  let interest = 0
-
-  // Tier upgrade is very attractive
-  const tierValues: Record<string, number> = {
-    elite: 5, major: 4, regional: 3, indie: 2, local: 1, underground: 0,
-  }
-  const currentTierVal = tierValues[currentOrg.tier] ?? 1
-  const targetTierVal  = tierValues[targetOrg.tier] ?? 1
-  const tierDiff = targetTierVal - currentTierVal
-
-  if (tierDiff > 0) interest += tierDiff * 20   // each tier jump = +20 interest
-  if (tierDiff < 0) interest -= 30              // going down a tier = strong deterrent
-
-  // Low morale = more open to leaving
-  if (wrestler.morale < 40) interest += 25
-  if (wrestler.morale < 60) interest += 10
-
-  // Contract expiring soon = more open
-  const weeksLeft = wrestler.contract?.weeksRemaining ?? 0
-  if (weeksLeft <= 8)  interest += 30
-  if (weeksLeft <= 16) interest += 15
-
-  // Has no-trade clause — protected
-  if (wrestler.contract?.noTradeClause) interest -= 40
-
-  // Exclusive contract penalty
-  if (wrestler.contract?.exclusivity === 'exclusive') interest -= 15
-
-  // High momentum wrestlers are targets
-  if (wrestler.momentum >= 80) interest += 10
-
-  return Math.max(0, Math.min(100, interest))
-}
-
-// ── Contract Expiry Warnings ──────────────────────────────────────────────────
-
-export type ContractUrgency = 'safe' | 'watch' | 'urgent' | 'critical'
-
-export function getContractUrgency(weeksRemaining: number): ContractUrgency {
-  if (weeksRemaining > 26) return 'safe'
-  if (weeksRemaining > 13) return 'watch'
-  if (weeksRemaining > 4)  return 'urgent'
-  return 'critical'
-}
-
-export function getContractWarningMessage(
-  wrestler: Wrestler,
-  urgency: ContractUrgency
-): string {
-  const name = wrestler.name
-  const weeks = wrestler.contract?.weeksRemaining ?? 0
-
-  switch (urgency) {
-    case 'watch':
-      return `${name}'s contract expires in ${weeks} weeks. Begin renewal talks soon.`
-    case 'urgent':
-      return `${name} is ${weeks} weeks from free agency. Rival orgs are circling. Act now.`
-    case 'critical':
-      return `${name} becomes a free agent in ${weeks} week${weeks === 1 ? '' : 's'}. This is a crisis — negotiate or lose them.`
-    default:
-      return `${name} is under contract for ${weeks} more weeks.`
-  }
-}
-
-// ── Release / Cut System ─────────────────────────────────────────────────────
-
-export interface ReleaseResult {
-  buyoutCost: number         // how much it costs to release early
-  moralePenaltyToRoster: number  // unhappy roster when a popular person gets cut
-  reputationPenalty: number     // org prestige hit
-}
-
-export function calculateReleaseCost(wrestler: Wrestler): ReleaseResult {
-  const weeksRemaining = wrestler.contract?.weeksRemaining ?? 0
-  const weeklySalary   = wrestler.contract?.salary ?? 0
-
-  // Buyout = 50% of remaining contract value
-  const buyoutCost = Math.round(weeksRemaining * weeklySalary * 0.5)
-
-  // Popular wrestlers leaving hurts morale
-  const moralePenalty = wrestler.popularity >= 75 ? Math.round((wrestler.popularity - 50) / 5) : 0
-
-  // Prestige hit for releasing well-liked wrestlers
-  const prestigePenalty = wrestler.overness >= 80 ? 3 : wrestler.overness >= 60 ? 1 : 0
-
-  return {
-    buyoutCost,
-    moralePenaltyToRoster: moralePenalty,
-    reputationPenalty: prestigePenalty,
-  }
+  return Math.round(weekly)
 }
