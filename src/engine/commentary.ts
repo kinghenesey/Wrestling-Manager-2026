@@ -15,10 +15,10 @@ function getOpeningLines(participants: Wrestler[], isMainEvent: boolean): Commen
   const lines: CommentaryLine[] = []
 
   if (isMainEvent) {
-    lines.push({ type: "hype", text: `${COMMENTATOR_A}: "And now, the moment we have all been waiting for — the MAIN EVENT of the evening!"`, timestamp: 0 })
-    lines.push({ type: "color", text: `${COMMENTATOR_B}: "The electricity in this building right now is absolutely incredible. You can feel it."`, timestamp: 0 })
+    lines.push({ type: "hype", text: `${COMMENTATOR_A}: "And now, the moment the whole arena has been waiting for — the MAIN EVENT of the evening!"`, timestamp: 0 })
+    lines.push({ type: "color", text: `${COMMENTATOR_B}: "You can feel the tension in the air. Both competitors know a win here changes everything."`, timestamp: 0 })
   } else {
-    lines.push({ type: "play_by_play", text: `${COMMENTATOR_A}: "And here we go, folks. Both competitors making their way to the ring now."`, timestamp: 0 })
+    lines.push({ type: "play_by_play", text: `${COMMENTATOR_A}: "Here we go, folks. The opening match is underway and the crowd is ready."`, timestamp: 0 })
   }
 
   participants.forEach(w => {
@@ -42,14 +42,14 @@ function getMidMatchLines(participants: Wrestler[], matchRating: number, minute:
   const names = participants.map(w => w.name)
 
   const midMatchLines = [
-    `${COMMENTATOR_A}: "Back and forth action here, neither competitor willing to give an inch!"`,
-    `${COMMENTATOR_B}: "The technical wrestling on display here is absolutely textbook. Beautiful to watch."`,
-    `${COMMENTATOR_A}: "The crowd is getting behind ${names[Math.floor(Math.random() * names.length)]} now!"`,
-    `${COMMENTATOR_B}: "You have to wonder how much both of these competitors have left in the tank."`,
-    `${COMMENTATOR_A}: "A near fall there! The crowd thought that was it!"`,
-    `${COMMENTATOR_B}: "The ring awareness of ${names[0]} is on another level tonight."`,
-    `${COMMENTATOR_A}: "Listen to this crowd! They are absolutely electric right now!"`,
-    `${COMMENTATOR_B}: "Championship caliber action right here. No question about it."`,
+    `${COMMENTATOR_A}: "Back and forth action here. Neither competitor willing to give an inch."`,
+    `${COMMENTATOR_B}: "The storytelling in this ring is sharp. Every move feels purposeful."`,
+    `${COMMENTATOR_A}: "The crowd has officially picked a side for ${names[Math.floor(Math.random() * names.length)]}."`,
+    `${COMMENTATOR_B}: "This is exactly the kind of match you build a reputation on."`,
+    `${COMMENTATOR_A}: "A huge near fall! The fans thought that was it!"`,
+    `${COMMENTATOR_B}: "${names[0]} is showing veteran instincts tonight."`,
+    `${COMMENTATOR_A}: "Listen to this building — they are absolutely electric."`,
+    `${COMMENTATOR_B}: "This is the definition of a main-event level battle."`,
   ]
 
   if (matchRating >= 75) {

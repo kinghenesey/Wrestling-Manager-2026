@@ -5,7 +5,7 @@ import { useGameStore } from "@/store/useGameStore"
 import { useDivisionStore } from "@/store/useDivisionStore"
 import { getPortraitSrc, getFallbackPortrait } from "@/utils/portraits"
 import type { Wrestler, Contract } from "@/types/wrestler"
-import { simulateFreeAgentResponse } from "@/engine/contractEngine"
+import type { Title } from "@/types/title"
 
 const PUSH_COLORS: Record<string, string> = {
   champion:    "bg-amber-500/20 text-amber-400 border-amber-500/30",
@@ -102,7 +102,7 @@ function SigningModal({ wrestler: w, orgBudget, onSign, onClose }: {
       <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-md p-6 space-y-5">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-zinc-100">Sign {w.name}</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200">
+          <button title="Close" onClick={onClose} className="text-zinc-500 hover:text-zinc-200">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -139,6 +139,7 @@ function SigningModal({ wrestler: w, orgBudget, onSign, onClose }: {
               <span className="text-xs text-zinc-500">Wants: ${baseDemand.toLocaleString()}/wk</span>
             </div>
             <input
+              title="Weekly Salary"
               type="range"
               min={100}
               max={Math.round(baseDemand * 1.5)}
@@ -161,6 +162,7 @@ function SigningModal({ wrestler: w, orgBudget, onSign, onClose }: {
               <span className="text-xs text-zinc-300">{offerWeeks} weeks ({Math.round(offerWeeks/52*10)/10} years)</span>
             </div>
             <input
+              title="Contract Length"
               type="range"
               min={13}
               max={156}
@@ -188,6 +190,79 @@ function SigningModal({ wrestler: w, orgBudget, onSign, onClose }: {
             className={"flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors " + (willSign ? "bg-amber-500 hover:bg-amber-600 text-zinc-950" : "bg-zinc-700 text-zinc-500 cursor-not-allowed")}
           >
             Sign Contract
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AssignTitleModal({
+  wrestler,
+  titles,
+  selectedTitleId,
+  onSelect,
+  onAssign,
+  onClose,
+}: {
+  wrestler: Wrestler
+  titles: Title[]
+  selectedTitleId: string | null
+  onSelect: (titleId: string) => void
+  onAssign: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-lg p-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-zinc-100">Assign Title to {wrestler.name}</h2>
+          <button title="Close" onClick={onClose} className="text-zinc-500 hover:text-zinc-200">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <p className="text-sm text-zinc-400">Choose an eligible championship for this wrestler.</p>
+          <div className="grid gap-2">
+            {titles.length === 0 ? (
+              <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-4 text-sm text-zinc-400">
+                No eligible titles are available for this wrestler.
+              </div>
+            ) : (
+              titles.map((title) => (
+                <label key={title.id} className="block rounded-lg border border-zinc-700 p-3 cursor-pointer hover:border-amber-500">
+                  <input
+                    type="radio"
+                    name="assign-title"
+                    value={title.id}
+                    checked={selectedTitleId === title.id}
+                    onChange={() => onSelect(title.id)}
+                    className="mr-3 accent-amber-400"
+                  />
+                  <span className="font-medium text-zinc-100">{title.shortName}</span>
+                  <span className="ml-2 text-xs text-zinc-500">
+                    {title.gender === "mixed" ? "Intergender" : title.gender} · {title.weightClass ?? "Open"}
+                  </span>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {title.isVacant ? "Vacant" : `Current champion: ${title.currentChampionId ?? "Unknown"}`}
+                  </p>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-sm font-medium">
+            Cancel
+          </button>
+          <button
+            onClick={onAssign}
+            disabled={!selectedTitleId || titles.length === 0}
+            className={"flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors " + (!selectedTitleId ? "bg-zinc-700 text-zinc-500 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-600 text-zinc-950")}
+          >
+            Assign Title
           </button>
         </div>
       </div>
@@ -258,7 +333,7 @@ function WrestlerRow({ wrestler: w, isSelected, onClick, showSignButton, onSign 
   )
 }
 
-function DetailPanel({ w, onClose }: { w: Wrestler; onClose: () => void }) {
+function DetailPanel({ w, onClose, isPlayerOrg, onAssignTitle }: { w: Wrestler; onClose: () => void; isPlayerOrg: boolean; onAssignTitle: () => void }) {
   const statKeys = [
     { key: "inRing" as const,      label: "In Ring"     },
     { key: "promo" as const,       label: "Promo"       },
@@ -381,6 +456,23 @@ function DetailPanel({ w, onClose }: { w: Wrestler; onClose: () => void }) {
         </div>
       ) : null}
 
+      {isPlayerOrg ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+            <div>
+              <p className="text-xs font-medium text-amber-200 uppercase tracking-wider">Title Assignment</p>
+              <p className="text-sm text-zinc-300">Assign this wrestler to a championship in your organization.</p>
+            </div>
+            <button
+              onClick={onAssignTitle}
+              className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-zinc-950 hover:bg-amber-600 transition-colors"
+            >
+              Assign Title
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {w.careerHighlights.length > 0 ? (
         <div>
           <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Career Highlights</p>
@@ -397,15 +489,26 @@ function DetailPanel({ w, onClose }: { w: Wrestler; onClose: () => void }) {
 
 export function Roster() {
   const { game } = useGameStore()
-  const { getByOrg, getFreeAgents, wrestlers, signContract, updateWrestler } = useRosterStore()
-  const { getOrgById } = useDivisionStore()
+  const { getByOrg, getFreeAgents, wrestlers, signContract, updateWrestler, getById } = useRosterStore()
+  const { getOrgById, getTitlesByOrg, setChampion } = useDivisionStore()
   const [search, setSearch] = useState("")
   const [tab, setTab] = useState<"male" | "female" | "free">("male")
+  const [assignTitleTarget, setAssignTitleTarget] = useState<Wrestler | null>(null)
+  const [selectedTitleId, setSelectedTitleId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Wrestler | null>(null)
   const [signingTarget, setSigningTarget] = useState<Wrestler | null>(null)
 
   const org = getOrgById(game.player.currentOrgId)
   const orgBudget = org?.wealth ?? 5000
+
+  const eligibleTitlesForWrestler = (w: Wrestler) => {
+    if (!w.currentOrgId) return []
+    return getTitlesByOrg(w.currentOrgId).filter((title) =>
+      title.tier !== "tag" &&
+      (title.gender === "mixed" || title.gender === w.gender) &&
+      (!title.weightClass || title.weightClass === w.weightClass)
+    )
+  }
 
   const orgRoster = getByOrg(game.player.currentOrgId)
   const freeAgents = getFreeAgents()
@@ -442,6 +545,37 @@ export function Roster() {
     setTab(signingTarget.gender === "female" ? "female" : "male")
   }
 
+  function handleAssignTitle() {
+    if (!assignTitleTarget || !selectedTitleId) return
+    const title = getTitlesByOrg(assignTitleTarget.currentOrgId ?? "").find((t) => t.id === selectedTitleId)
+    if (!title) return
+
+    const previousChampionId = title.currentChampionId
+    if (previousChampionId && previousChampionId !== assignTitleTarget.id) {
+      const previousChampion = getById(previousChampionId)
+      if (previousChampion) {
+        updateWrestler(previousChampion.id, {
+          championships: previousChampion.championships.filter((c) => c.titleId !== title.id),
+        })
+      }
+    }
+
+    setChampion(title.id, assignTitleTarget.id, game.week)
+    const alreadyChampion = assignTitleTarget.championships.some((c) => c.titleId === title.id)
+    const updatedChampionships = alreadyChampion
+      ? assignTitleTarget.championships
+      : [...assignTitleTarget.championships, { titleId: title.id, wonWeek: game.week, defenses: 0 }]
+
+    updateWrestler(assignTitleTarget.id, {
+      championships: updatedChampionships,
+      pushLevel: "champion",
+      careerHighlights: [...assignTitleTarget.careerHighlights, `Won ${title.shortName} in week ${game.week}`],
+    })
+
+    setAssignTitleTarget(null)
+    setSelectedTitleId(null)
+  }
+
   return (
     <div className="space-y-4">
       {signingTarget && (
@@ -450,6 +584,19 @@ export function Roster() {
           orgBudget={orgBudget}
           onSign={handleSign}
           onClose={() => setSigningTarget(null)}
+        />
+      )}
+      {assignTitleTarget && (
+        <AssignTitleModal
+          wrestler={assignTitleTarget}
+          titles={eligibleTitlesForWrestler(assignTitleTarget)}
+          selectedTitleId={selectedTitleId}
+          onSelect={setSelectedTitleId}
+          onAssign={handleAssignTitle}
+          onClose={() => {
+            setAssignTitleTarget(null)
+            setSelectedTitleId(null)
+          }}
         />
       )}
 
@@ -509,7 +656,14 @@ export function Roster() {
             />
           ))}
         </div>
-        {selected && <DetailPanel w={selected} onClose={() => setSelected(null)} />}
+        {selected && (
+          <DetailPanel
+            w={selected}
+            onClose={() => setSelected(null)}
+            isPlayerOrg={selected.currentOrgId === game.player.currentOrgId}
+            onAssignTitle={() => setAssignTitleTarget(selected)}
+          />
+        )}
       </div>
     </div>
   )

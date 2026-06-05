@@ -8,15 +8,23 @@ import { ShowPlanner } from "@/pages/ShowPlanner"
 import Academy from '@/pages/Academy'
 // in routes:
 <Route path="/academy" element={<Academy />} />
-import { Finances }    from "@/pages/Finances"
+import Finances from '@/pages/Finances'
+// in routes:
+<Route path="/finances" element={<Finances />} />
 import Agents from '@/pages/Agents'
 // in routes:
 <Route path="/agents" element={<Agents />} />
 import { Divisions }   from "@/pages/Divisions"
 import { Underground } from "@/pages/Underground"
-import { Awards }      from "@/pages/Awards"
-import { Calendar }    from "@/pages/Calendar"
-import { Settings }    from "@/pages/Settings"
+import Awards from '@/pages/Awards'
+// in routes:
+<Route path="/awards" element={<Awards />} />
+import Calendar from '@/pages/Calendar'
+// in routes:
+<Route path="/calendar" element={<Calendar />} />
+import Settings from '@/pages/Settings'
+// in routes:
+<Route path="/settings" element={<Settings />} />
 
 function GameRouter() {
   const saved = localStorage.getItem("wm26-game")

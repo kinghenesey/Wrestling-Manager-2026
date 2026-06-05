@@ -12,102 +12,117 @@ interface MatchEvent {
 
 function generateMatchEvents(
   participants: Wrestler[],
+  match: Match,
   result: MatchResult,
   isTitle: boolean
 ): MatchEvent[] {
   const events: MatchEvent[] = []
   const duration = result.matchDurationMinutes
   const winner = participants.find(w => result.winnerIds.includes(w.id))
-  const loser  = participants.find(w => !result.winnerIds.includes(w.id))
+  const loser = participants.find(w => !result.winnerIds.includes(w.id))
   if (!winner) return []
 
+  const matchLabel = match.matchType.replace(/_/g, " ")
+  const stakes = match.stipulation !== "none" ? ` (${match.stipulation.replace(/_/g, " ")})` : ""
+  const openingLine = isTitle
+    ? `The bell rings for this ${matchLabel}${stakes} and the stakes could not be higher!`
+    : `The bell rings for this ${matchLabel}${stakes}. Let's see who can seize the moment.`
+
   const moves = [
-    "lands a hard right hand",
-    "executes a crisp suplex",
-    "whips opponent into the ropes",
-    "hits a running clothesline",
-    "drops a sharp elbow",
-    "delivers a stiff kick to the midsection",
-    "nails a perfect dropkick",
-    "slams opponent down hard",
-    "catches opponent mid-air into a powerslam",
-    "rocks opponent with a forearm strike",
-    "applies a headlock for leverage",
-    "counters with a quick rollup attempt",
+    "lands a stiff forearm",
+    "hits a textbook dropkick",
+    "drives a knee into the midsection",
+    "whips them hard into the corner",
+    "delivers a crisp snap suplex",
+    "connects with a haymaker",
+    "fires off a running shotgun dropkick",
+    "plants them with a spinebuster",
+    "catches them with a picture-perfect DDT",
+    "throws a brutal clothesline",
+    "switches momentum with a snap German suplex",
+    "grabs a quick armbar for pressure",
   ]
 
   const nearfalls = [
-    "hooks the leg — ONE! TWO! KICKOUT at 2!",
-    "rolls up for the pin — TWO COUNT!",
-    "covers — TWO AND A HALF! SO CLOSE!",
-    "inside cradle — TWO! The crowd gasps!",
+    "hooks the leg — ONE! TWO! KICKOUT with a shoulder up!",
+    "rolls them up — TWO COUNT! So close!",
+    "covers — TWO AND A HALF! The crowd is on the edge of their seats!",
+    "inside cradle — TWO! The arena is behind them!",
   ]
 
   const momentumShifts = [
-    "blocks the strike and fires back with a flurry!",
-    "counters out of nowhere and the crowd erupts!",
-    "reverses the whip and takes full control!",
-    "ducks under and hits a thunderous backdrop driver!",
+    "blocks the shot and counters into a thunderous reversal!",
+    "dodges, slips out, and turns the tide with a flurry!",
+    "catches them with a momentum-changing big move!",
+    "reverses the hold and suddenly the match is sliced in half!",
   ]
 
-  // Opening
-  events.push({ minute: 0, type: "commentary", text: "The bell rings! Both competitors are locked in and ready." })
-  events.push({ minute: 1, type: "move", text: participants[0]?.name + " " + moves[0] + ".", actor: participants[0]?.name })
-  events.push({ minute: 2, type: "move", text: loser?.name + " " + moves[2] + ".", actor: loser?.name })
+  events.push({ minute: 0, type: "commentary", text: openingLine })
+  events.push({ minute: 1, type: "move", text: `${participants[0]?.name} ${moves[0]}.`, actor: participants[0]?.name })
+  if (loser) {
+    events.push({ minute: 2, type: "move", text: `${loser.name} ${moves[2]}.`, actor: loser.name })
+  }
 
-  // Early match
-  for (let m = 3; m < Math.floor(duration * 0.3); m += 2) {
-    const p = participants[Math.floor(Math.random() * participants.length)]
+  const earlyMax = Math.max(3, Math.floor(duration * 0.25))
+  for (let minute = 3; minute < earlyMax; minute += 3) {
+    const wrestler = participants[Math.floor(Math.random() * participants.length)]
     const move = moves[Math.floor(Math.random() * moves.length)]
-    events.push({ minute: m, type: "move", text: p?.name + " " + move + ".", actor: p?.name })
+    events.push({ minute, type: "move", text: `${wrestler.name} ${move}.`, actor: wrestler.name })
   }
 
-  // Mid match
   const midPoint = Math.floor(duration * 0.5)
-  events.push({ minute: midPoint - 2, type: "crowd", text: "The crowd is rising to their feet — the action is intensifying!" })
-  events.push({ minute: midPoint, type: "momentum_shift", text: winner?.name + " " + momentumShifts[Math.floor(Math.random() * momentumShifts.length)], actor: winner?.name })
-
-  if (result.matchRating >= 70) {
-    events.push({ minute: midPoint + 1, type: "crowd", text: '"THIS IS AWESOME!" chants break out across the building.' })
-  }
-
-  // Near falls
-  const nearfallMin = Math.floor(duration * 0.65)
-  events.push({ minute: nearfallMin, type: "nearfall", text: winner?.name + " " + nearfalls[0], actor: winner?.name })
+  events.push({ minute: midPoint - 1, type: "crowd", text: `The audience is up on its feet for this ${matchLabel}.` })
+  events.push({ minute: midPoint, type: "momentum_shift", text: `${winner.name} ${momentumShifts[Math.floor(Math.random() * momentumShifts.length)]}`, actor: winner.name })
+  events.push({ minute: midPoint + 1, type: "move", text: `${winner.name} looks to be in control as the match reaches its midpoint.`, actor: winner.name })
 
   if (result.matchRating >= 75) {
-    events.push({ minute: nearfallMin + 2, type: "nearfall", text: loser?.name + " " + nearfalls[2], actor: loser?.name })
-    events.push({ minute: nearfallMin + 3, type: "crowd", text: "The crowd cannot believe it! What a match!" })
+    events.push({ minute: midPoint + 2, type: "crowd", text: '"THIS IS AWESOME!" chants are filling the arena.' })
   }
 
-  // Signature
-  const sigMin = Math.floor(duration * 0.8)
-  events.push({ minute: sigMin, type: "signature", text: winner?.name + " sets up for the " + (winner?.signature ?? "signature move") + "! The crowd erupts!", actor: winner?.name })
-  events.push({ minute: sigMin + 1, type: "move", text: winner?.name + " connects with the " + (winner?.signature ?? "signature") + "! Cover attempt!", actor: winner?.name })
-  events.push({ minute: sigMin + 1, type: "nearfall", text: "ONE! TWO! " + loser?.name + " gets a shoulder up at the VERY last moment!", actor: loser?.name })
+  const nearfallMin = Math.floor(duration * 0.65)
+  events.push({ minute: nearfallMin, type: "nearfall", text: `${winner.name} ${nearfalls[0]}`, actor: winner.name })
 
-  // Finish
-  events.push({ minute: duration - 1, type: "finisher", text: winner?.name + " calls for it — THE " + (winner?.finisher ?? "finisher").toUpperCase() + "!!!", actor: winner?.name })
-  events.push({ minute: duration - 1, type: "finisher", text: winner?.name + " HITS IT! This has to be it!", actor: winner?.name })
-
-  const finishLines: Record<string, string> = {
-    pinfall:    "ONE! TWO! THREE! The referee calls it! It is OVER!",
-    submission: loser?.name + " taps! " + loser?.name + " TAPS OUT! " + winner?.name + " wins by submission!",
-    dq:         "The referee has seen enough and calls for the disqualification!",
-    count_out:  "The referee reaches TEN! Counted out! The match is over!",
+  if (result.matchRating >= 80 && loser) {
+    events.push({ minute: nearfallMin + 2, type: "nearfall", text: `${loser.name} ${nearfalls[2]}`, actor: loser.name })
+    events.push({ minute: nearfallMin + 3, type: "crowd", text: `The crowd can hardly believe what they're seeing.`, })
   }
-  events.push({ minute: duration, type: "commentary", text: finishLines[result.method] ?? winner?.name + " wins!" })
+
+  const sigMin = Math.max(nearfallMin + 2, Math.floor(duration * 0.78))
+  const signatureName = winner.signature || "signature move"
+  events.push({ minute: sigMin, type: "signature", text: `${winner.name} sets up ${signatureName} and the crowd roars!`, actor: winner.name })
+  events.push({ minute: sigMin + 1, type: "move", text: `${winner.name} lands ${signatureName}! The pressure is on.`, actor: winner.name })
+  if (loser) {
+    events.push({ minute: sigMin + 1, type: "nearfall", text: `ONE! TWO! ${loser.name} survives!`, actor: loser.name })
+  }
 
   if (isTitle) {
-    events.push({ minute: duration, type: "crowd", text: "NEW CHAMPION! " + winner?.name + " IS YOUR NEW CHAMPION! The arena is absolutely ELECTRIC!" })
+    events.push({ minute: duration - 2, type: "commentary", text: `Everything is on the line here. This is what championship wrestling is all about.` })
+  }
+
+  const finisherName = winner.finisher || "finisher"
+  events.push({ minute: duration - 1, type: "finisher", text: `${winner.name} calls for THE ${finisherName.toUpperCase()}!!!`, actor: winner.name })
+  events.push({ minute: duration - 1, type: "finisher", text: `${winner.name} hits the ${finisherName}! This could be it!`, actor: winner.name })
+
+  const finishText: Record<string, string> = {
+    pinfall: `ONE! TWO! THREE! The referee counts it! ${winner.name} wins!`,
+    submission: `${loser?.name ?? "The opponent"} taps out! ${winner.name} gets the submission victory!`,
+    dq: `The referee sees the foul and calls for the disqualification!`,
+    count_out: `The count reaches ten! That's a count-out finish!`,
+    no_contest: `The match breaks down into chaos and is ruled a no contest!`,
+    forfeit: `${loser?.name ?? "The opponent"} can no longer continue. The match is over.`,
+  }
+  events.push({ minute: duration, type: "commentary", text: finishText[result.method] ?? `${winner.name} wins!` })
+
+  if (isTitle && result.method !== "dq" && result.method !== "count_out") {
+    events.push({ minute: duration, type: "crowd", text: `The arena erupts as ${winner.name} celebrates as champion!` })
   }
 
   if (result.matchRating >= 85) {
-    events.push({ minute: duration, type: "commentary", text: "What a match. A genuine classic. Rating: " + result.matchRating + "/100." })
+    events.push({ minute: duration, type: "commentary", text: `This one will be talked about for weeks. Rating: ${result.matchRating}/100.` })
   } else if (result.matchRating >= 70) {
-    events.push({ minute: duration, type: "commentary", text: "A very solid match tonight. Rating: " + result.matchRating + "/100." })
-  } else {
-    events.push({ minute: duration, type: "commentary", text: "Match rating: " + result.matchRating + "/100." })
+    events.push({ minute: duration, type: "commentary", text: `A solid contest tonight. Rating: ${result.matchRating}/100.` })
+  } else if (result.matchRating < 50) {
+    events.push({ minute: duration, type: "commentary", text: `This one never quite clicked. Rating: ${result.matchRating}/100.` })
   }
 
   return events.sort((a, b) => a.minute - b.minute)
@@ -163,7 +178,7 @@ export function MatchViewer({ match, participants, result, isTitle, titleName, o
   const [speed, setSpeed] = useState<1 | 2 | 4>(1)
   const feedRef = useRef<HTMLDivElement>(null)
 
-  const events = generateMatchEvents(participants, result, isTitle)
+  const events = generateMatchEvents(participants, match, result, isTitle)
   const duration = result.matchDurationMinutes
   const winner = participants.find(w => result.winnerIds.includes(w.id))
   const home = participants[0]

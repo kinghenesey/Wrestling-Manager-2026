@@ -7,9 +7,10 @@
 import type { Wrestler } from '../types/wrestler'
 import type { Storyline } from '../types/storyline'
 import type { PlayerManager, JobOffer } from '../types/game'
-import type { WeekSimResult, SimEvent } from '../types/WeekSim'
+import type { WeekSimResult, SimEvent } from '../types/weekSim'
 import { rollInjury, processWeeklyRecovery } from './injuryEngine'
 import { applyHeatDecay } from './storylineEngine'
+import type { FreeAgent } from '../types/underground'
 
 // ── Reputation tier thresholds ────────────────────────────────────────────────
 
@@ -51,12 +52,14 @@ export interface SimulateWeekInput {
   wrestlers: Wrestler[]
   storylines: Storyline[]
   orgId: string
+  undergroundFreeAgents: FreeAgent[]
 }
 
 export interface SimulateWeekOutput extends WeekSimResult {
   updatedWrestlers: Wrestler[]
   updatedStorylines: Storyline[]
   updatedPlayer: PlayerManager
+  newUndergroundAgents: FreeAgent[]
 }
 
 export function simulateWeek(input: SimulateWeekInput): SimulateWeekOutput {
@@ -67,10 +70,11 @@ export function simulateWeek(input: SimulateWeekInput): SimulateWeekOutput {
   const newInjuries: string[] = []
   const recoveries: string[] = []
 
+  
+
   // Work on copies so original store state is untouched until commit
   let updatedWrestlers = wrestlers.map(w => ({ ...w }))
   let updatedPlayer = { ...player }
-
   // ── 1. Contract tick + expiry ─────────────────────────────────────────────
 
   updatedWrestlers = updatedWrestlers.map(w => {
@@ -309,6 +313,27 @@ export function simulateWeek(input: SimulateWeekInput): SimulateWeekOutput {
     jobOffers: updatedPlayer.jobOffers.filter(o => o.expiresWeek > week),
   }
 
+  // ── 9. Underground weekly injection ──────────────────────────────────────────
+  // Ensure minimum 5 new fighters enter the underground pool each week
+
+  const MIN_UNDERGROUND_WEEKLY = 5
+  const newUndergroundAgents: FreeAgent[] = []
+
+  const toGenerate = Math.max(MIN_UNDERGROUND_WEEKLY, Math.floor(Math.random() * 4) + MIN_UNDERGROUND_WEEKLY)
+
+  for (let i = 0; i < toGenerate; i++) {
+    const askingSalary = Math.floor(Math.random() * 300) + 100
+    newUndergroundAgents.push({
+      wrestlerId:              `ug_${week}_${i}_${Math.random().toString(36).slice(2, 7)}`,
+      weeksAvailable:          0,
+      askingSalary,
+      interestedOrgIds:        [],
+      lastOrgId:               null,
+      undergroundAppearances:  Math.floor(Math.random() * 10),
+      isExclusive:             false,
+    })
+  }
+
   return {
     week,
     year,
@@ -321,5 +346,6 @@ export function simulateWeek(input: SimulateWeekInput): SimulateWeekOutput {
     updatedWrestlers,
     updatedStorylines,
     updatedPlayer,
+    newUndergroundAgents,
   }
 }

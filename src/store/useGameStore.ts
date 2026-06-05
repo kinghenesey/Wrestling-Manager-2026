@@ -4,7 +4,8 @@ import type { GameState, PlayerManager, CalendarEvent } from "@/types/game"
 import { simulateWeek } from "@/engine/weekSimEngine"
 import { useRosterStore } from "@/store/useRosterStore"
 import { useStorylineStore } from "@/store/useStorylineStore"
-import type { WeekSimResult } from "@/types/WeekSim"
+import type { WeekSimResult } from "@/types/weekSim"
+import { useUndergroundStore } from "./useUndergroundStore"
 
 interface GameStore {
   game: GameState
@@ -61,9 +62,7 @@ export const useGameStore = create<GameStore>()(
         const storylines = useStorylineStore.getState().storylines ?? []
 
         const newWeek = game.week + 1
-        const newYear = newWeek > 0 && newWeek % 52 === 0
-          ? game.year + 1
-          : game.year
+        const newYear = game.startYear + Math.floor((newWeek - 1) / 52)
 
         const result = simulateWeek({
           week: newWeek,
@@ -72,6 +71,11 @@ export const useGameStore = create<GameStore>()(
           wrestlers,
           storylines,
           orgId: game.player.currentOrgId,
+          undergroundFreeAgents: useUndergroundStore.getState().freeAgents,
+        })
+
+        result.newUndergroundAgents?.forEach(fa => {
+          useUndergroundStore.getState().addFreeAgent(fa)
         })
 
         // Commit wrestler updates

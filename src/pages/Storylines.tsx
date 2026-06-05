@@ -1,5 +1,5 @@
 ﻿import { useState } from "react"
-import { Plus, Flame, Swords, TrendingUp, TrendingDown, X, ChevronDown, ChevronUp } from "lucide-react"
+import { Plus, Flame, Swords, TrendingUp, X, ChevronDown, ChevronUp } from "lucide-react"
 import { useStorylineStore } from "@/store/useStorylineStore"
 import { useRosterStore } from "@/store/useRosterStore"
 import { useGameStore } from "@/store/useGameStore"
@@ -87,7 +87,7 @@ function CreateStorylineModal({ onClose }: { onClose: () => void }) {
       <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-lg p-6 space-y-5 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-zinc-100">Create Storyline</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} title="Close" className="text-zinc-500 hover:text-zinc-200"><X className="w-5 h-5" /></button>
         </div>
 
         <div className="space-y-2">
@@ -97,7 +97,7 @@ function CreateStorylineModal({ onClose }: { onClose: () => void }) {
 
         <div className="space-y-2">
           <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Storyline Type</label>
-          <select value={type} onChange={e => setType(e.target.value as StorylineType)} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg text-sm focus:outline-none focus:border-amber-500">
+          <select title="Storyline Type" value={type} onChange={e => setType(e.target.value as StorylineType)} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg text-sm focus:outline-none focus:border-amber-500">
             {STORYLINE_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}</option>)}
           </select>
         </div>
@@ -136,7 +136,19 @@ function CreateStorylineModal({ onClose }: { onClose: () => void }) {
             <input placeholder="Search roster..." className="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded text-xs focus:outline-none focus:border-amber-500" value={search} onChange={e => setSearch(e.target.value)} />
             <div className="max-h-36 overflow-y-auto space-y-1">
               {filtered.map(w => (
-                <div key={w.id} onClick={() => { adding === "protagonist" ? setProtagonists([...protagonists, w.id]) : setAntagonists([...antagonists, w.id]); setAdding(null); setSearch("") }} className="flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-zinc-700 transition-colors">
+                <div
+                  key={w.id}
+                  onClick={() => {
+                    if (adding === "protagonist") {
+                      setProtagonists([...protagonists, w.id])
+                    } else {
+                      setAntagonists([...antagonists, w.id])
+                    }
+                    setAdding(null)
+                    setSearch("")
+                  }}
+                  className="flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-zinc-700 transition-colors"
+                >
                   <Portrait w={w} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-zinc-200 truncate">{w.name}</p>
@@ -164,7 +176,7 @@ function CreateStorylineModal({ onClose }: { onClose: () => void }) {
 function StorylineCard({ storyline: s }: { storyline: Storyline }) {
   const { wrestlers } = useRosterStore()
   const { game } = useGameStore()
-  const { updateStoryline, updateHeat, concludeStoryline } = useStorylineStore()
+  const { updateHeat, concludeStoryline } = useStorylineStore()
   const [expanded, setExpanded] = useState(false)
 
   const protagonists = s.protagonistIds.map(id => wrestlers.find(w => w.id === id)).filter(Boolean) as Wrestler[]
@@ -173,7 +185,6 @@ function StorylineCard({ storyline: s }: { storyline: Storyline }) {
 
   const weeksActive = game.week - s.startWeek
   const phase = getStorylinePhase(weeksActive, s.type)
-  const heatLevel = getHeatLevel(s.heat)
   const advice = getPhaseBookingAdvice(phase, s.type, protagonists[0]?.name ?? "protagonist", antagonists[0]?.name ?? "antagonist")
 
   const pushRecs = allParticipants
@@ -304,7 +315,7 @@ function StorylineCard({ storyline: s }: { storyline: Storyline }) {
           <div className="flex items-center gap-3">
             <div className="flex-1">
               <p className="text-xs text-zinc-500 mb-1">Adjust Heat</p>
-              <input type="range" min={0} max={100} value={s.heat} onChange={e => updateHeat(s.id, Number(e.target.value))} className="w-full accent-amber-400" />
+              <input title="Heat" type="range" min={0} max={100} value={s.heat} onChange={e => updateHeat(s.id, Number(e.target.value))} className="w-full accent-amber-400" />
             </div>
             <span className="text-sm font-bold text-amber-400 w-8 text-right">{s.heat}</span>
           </div>
@@ -316,7 +327,7 @@ function StorylineCard({ storyline: s }: { storyline: Storyline }) {
 
 export function Storylines() {
   const { game } = useGameStore()
-  const { storylines, getActive, getByOrg } = useStorylineStore()
+  const { getActive, getByOrg } = useStorylineStore()
   const { getByOrg: getRoster } = useRosterStore()
   const [showCreate, setShowCreate] = useState(false)
   const [filter, setFilter] = useState<"active" | "all" | "concluded">("active")
