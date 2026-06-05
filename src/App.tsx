@@ -9,7 +9,9 @@ import Academy from '@/pages/Academy'
 // in routes:
 <Route path="/academy" element={<Academy />} />
 import { Finances }    from "@/pages/Finances"
-import { Agents }      from "@/pages/Agents"
+import Agents from '@/pages/Agents'
+// in routes:
+<Route path="/agents" element={<Agents />} />
 import { Divisions }   from "@/pages/Divisions"
 import { Underground } from "@/pages/Underground"
 import { Awards }      from "@/pages/Awards"

@@ -257,7 +257,7 @@ function ShowSummaryModal({ show, onClose }: { show: Show; onClose: () => void }
 }
 
 export function ShowPlanner() {
-  const { game, advanceWeek, updatePlayer } = useGameStore()
+  const { game, advanceWeek, updatePlayer, addReputationPoints } = useGameStore()
   const { getByOrg, wrestlers, updateMomentum, updatePopularity, updateMorale } = useRosterStore()
   const { addShow } = useShowStore()
   const { getOrgById } = useDivisionStore()
@@ -269,7 +269,6 @@ export function ShowPlanner() {
   const [showName, setShowName] = useState("")
   const [venue, setVenue] = useState("")
 
-  // Match viewer queue
   const [matchQueue, setMatchQueue] = useState<Match[]>([])
   const [currentMatchIdx, setCurrentMatchIdx] = useState(0)
   const [watchingMatches, setWatchingMatches] = useState(false)
@@ -401,7 +400,6 @@ export function ShowPlanner() {
 
     addShow(show)
 
-    // Apply post-match effects
     simulatedMatches.forEach(m => {
       if (!m.result) return
       m.participantIds.forEach(id => {
@@ -415,9 +413,9 @@ export function ShowPlanner() {
     const repGained = Math.round(overallRating / 10)
     const newTotal  = game.player.totalShowsBooked + 1
     const newAvg    = Math.round(((game.player.avgShowRating * game.player.totalShowsBooked) + overallRating) / newTotal)
-    updatePlayer({ totalShowsBooked: newTotal, avgShowRating: newAvg, reputationPoints: game.player.reputationPoints + repGained })
+    updatePlayer({ totalShowsBooked: newTotal, avgShowRating: newAvg })
+    addReputationPoints(repGained)
 
-    // Start match viewer queue
     setPendingShow(show)
     setMatchQueue(simulatedMatches)
     setCurrentMatchIdx(0)
@@ -455,8 +453,6 @@ export function ShowPlanner() {
 
   return (
     <div className="space-y-4">
-
-      {/* Match viewer - shows each match one by one */}
       {watchingMatches && currentMatch && currentMatch.result && (
         <MatchViewer
           match={currentMatch}
@@ -468,7 +464,6 @@ export function ShowPlanner() {
         />
       )}
 
-      {/* Show summary after all matches viewed */}
       {completedShow && <ShowSummaryModal show={completedShow} onClose={handleCloseResults} />}
 
       <div className="flex items-center justify-between">
